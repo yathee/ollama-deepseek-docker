@@ -1,0 +1,49 @@
+
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:v0.2.5
+    container_name: openwebui
+    ports:
+      - "3000:8080"  # Web UI port
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434
+      - WEBUI_HOST=0.0.0.0  
+    depends_on:
+      - ollama
+    volumes:
+      - openwebui-data:/app/backend/data
+    restart: unless-stopped
+
+  # Auto-pull deepseek model after ollama starts
+  init-deepseek:
+    image: curlimages/curl
+    depends_on:
+      - ollama
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Ollama...';
+        sleep 10;
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"deepseek-coder:1.3b\"}' -H 'Content-Type: application/json';
+        echo 'DeepSeek model loaded.';
+      "
+
+volumes:
+  ollama-data:
+    name: ollama-data
+  openwebui-data:
+    name: openwebui-data
